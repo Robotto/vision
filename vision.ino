@@ -1,3 +1,5 @@
+//code snippets from URL: 
+
 #include "Seeed_Arduino_GroveAI.h"
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -13,13 +15,22 @@ Adafruit_SSD1306 left(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 Adafruit_SSD1306 right(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, -1);
 
 
-int xMin = 512;
-int xMax = 0;
-int yMin = 512;
-int yMax = 0;
+int xMin = 55;
+int xMax = 170;
+int yMin = 91;
+int yMax =149;
 
 int pupilX = 64;
 int pupilY = 32;
+
+/*
+          pupilX = map(data.x, xMin, xMax, 120, 8);
+          pupilY = map(data.y, yMin, yMax, 8, 56);
+*/
+const int pupilMaxX = 8;
+int pupilMinX = 120;
+const int pupilMaxY = 8;
+int pupilMinY = 56;
 
 
 
@@ -31,12 +42,7 @@ void setup() {
   Serial.begin(115200);
 
   Serial.print("Running Setup...");
-  if (ai.begin(ALGO_OBJECT_DETECTION, (MODEL_INDEX_T)0x11))  // Object detection and pre-trained model 1
-  {
-    state = 1;
-  } else {
-    Serial.println("Algo begin failed.");
-  }
+
 
   if (!left.begin(SSD1306_SWITCHCAPVCC, 0x3C)) {  // Address 0x3D for 128x64
     Serial.println(F("SSD1306 \"left\" allocation failed"));
@@ -61,6 +67,32 @@ void setup() {
   right.setTextSize(1);
   right.setTextColor(WHITE);
   right.setCursor(0, 10);
+
+  if (ai.begin(ALGO_OBJECT_DETECTION, (MODEL_INDEX_T)0x11))  // Object detection and pre-trained model 1
+  {
+
+    Serial.print("Version: ");
+    Serial.println(ai.version());
+    Serial.print("ID: ");
+    Serial.println( ai.id());
+    Serial.print("Algo: ");
+    Serial.println( ai.algo());
+    Serial.print("Model: ");
+    Serial.println(ai.model());
+    Serial.print("Confidence: ");
+    Serial.println(ai.confidence());
+
+    state = 1;
+  } else {
+    Serial.println("Algo begin failed.");
+    left.println("ALGO FAILED");
+    
+        
+    right.println("Have you tried turning it off and on again?");
+    display();
+
+  }
+
   // Display static text
   left.println("Hello");
   left.display();
@@ -68,6 +100,9 @@ void setup() {
   right.display();
 
   Serial.println(" Done!");
+  delay(2000);
+  clear();
+  outlines();
   Serial.println("Beginning loop...");
 }
 
@@ -83,7 +118,7 @@ void loop() {
         //Loop code here:
         if (millis() - faceDetectTimestamp > 10000) {  //It's been ten seconds since a face was detected.
           Serial.print('.');                           //Fall asleep
-          clear();
+          //clear();
         }
 
         //TODO: Blink at random
@@ -107,11 +142,14 @@ void loop() {
           //          Serial.print("Detecting and calculating: ");
           //          Serial.println(i+1);
           ai.get_result(i, (uint8_t*)&data, sizeof(object_detection_t));  //get result
-          if (data.confidence < 70) continue;                             //Skip any detected faces with lower confidence
+          if (data.confidence < 80) continue;                             //Skip any detected faces with lower confidence
+          unsigned long detectionTime = millis()-faceDetectTimestamp;
           faceDetectTimestamp = millis();
-          /*
+          
           Serial.print("confidence:");
           Serial.print(data.confidence);
+          Serial.print("\tdT:");
+          Serial.print(detectionTime);
           //CENTER COORDINATES
           Serial.print("\tX:");
           Serial.print(data.x);
@@ -122,19 +160,19 @@ void loop() {
           //Serial.print(data.w);
           //Serial.print("\tH:");
           //Serial.print(data.h);
-          */
+          
           //Refresh min/max values:
           if (data.x < xMin) xMin = data.x;
           if (data.y < yMin) yMin = data.y;
           if (data.x > xMax) xMax = data.x;
           if (data.y > yMax) yMax = data.y;
 
-          pupilX = map(data.x, xMin, xMax, 120, 8);
-          pupilY = map(data.y, yMin, yMax, 8, 56);
-          clear();
+          pupilX = map(data.x, xMin, xMax, pupilMinX, pupilMaxX);
+          pupilY = map(data.y, yMin, yMax, pupilMinY, pupilMaxY);
+          //clear();
           eyes(pupilX, pupilY);
           display();
-
+/*
           Serial.print("\tXmin:");
           Serial.print(xMin);
           Serial.print("\tXmax:");
@@ -147,9 +185,10 @@ void loop() {
           Serial.print(data.x);
           Serial.print("\tYin:");
           Serial.print(data.y);
-          Serial.print("\tX:");
+*/
+          Serial.print("\tOLEDx:");
           Serial.print(pupilX);
-          Serial.print("\tY:");
+          Serial.print("\tOLEDy:");
           Serial.print(pupilY);
 
 
@@ -161,6 +200,9 @@ void loop() {
     } else {
       delay(500);
       Serial.println("Invoke Failed.");
+      
+      
+
     }
   } else {
     state == 0;
@@ -172,8 +214,31 @@ void clear() {
   right.clearDisplay();
 }
 void eyes(int x, int y) {
+  static int oldX,oldY;
+  left.fillCircle(oldX, oldY, 6, 0);
+  right.fillCircle(oldX, oldY, 6, 0);
+  
   left.fillCircle(x, y, 6, 1);
   right.fillCircle(x, y, 6, 1);
+
+  oldX=x;
+  oldY=y;
+
+}
+
+void outlines(){
+    const int centerX=64;
+    const int fatness=3;
+
+    for(int i=centerX;i>centerX-fatness;i--){ //use a for loop to draw fatter ellipses...
+    //left.drawEllipse(64, 32, 64, 32,1);
+    //right.drawEllipse(64, 32, 64, 32,1);
+    left.drawEllipse(64, 32, i, i/2,1);
+    right.drawEllipse(64, 32, i, i/2,1);
+    }
+    
+    
+  
 }
 
 void display() {
